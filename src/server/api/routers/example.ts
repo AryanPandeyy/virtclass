@@ -32,7 +32,7 @@ export const signUpRouter = createTRPCRouter({
       z.object({
         name: z.string().min(1, "Name Please").max(10),
         email: z.string().email(),
-        pass: z.string().min(3, "Password must be more than 3 words"),
+        pass: z.string().min(3, "Password must be more than 3 words").max(10),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -47,6 +47,34 @@ export const signUpRouter = createTRPCRouter({
       return {
         status: 201,
         message: "Profile Created",
+        result: result,
+      };
+    }),
+  login: publicProcedure
+    .input(
+      z.object({
+        email: z.string().email(),
+        pass: z.string().min(3).max(10),
+      }),
+    )
+    .mutation(async (opts) => {
+      // const { name, email, pass } = opts.input;
+      const result = await opts.ctx.db.profile.findUnique({
+        where: {
+          email: opts.input.email,
+          password: opts.input.pass,
+        },
+      });
+      if (result !== null) {
+        return {
+          status: 201,
+          message: "Success",
+          result: result,
+        };
+      }
+      return {
+        status: 404,
+        message: "Failed",
         result: result,
       };
     }),
