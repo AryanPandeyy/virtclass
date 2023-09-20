@@ -33,9 +33,12 @@ type CreateContextOptions = Record<string, never>;
  *
  * @see https://create.t3.gg/en/usage/trpc#-serverapitrpcts
  */
-const createInnerTRPCContext = (_opts: CreateContextOptions) => {
+const createInnerTRPCContext = (_opts: CreateContextOptions, next_opts: CreateNextContextOptions) => {
+  const {req,res} = next_opts;
   return {
     db,
+    res,
+    req,
   };
 };
 
@@ -46,7 +49,11 @@ const createInnerTRPCContext = (_opts: CreateContextOptions) => {
  * @see https://trpc.io/docs/context
  */
 export const createTRPCContext = (_opts: CreateNextContextOptions) => {
-  return createInnerTRPCContext({});
+  return {
+    ..._opts,
+    db
+  }
+  // return createInnerTRPCContext({},_opts);
 };
 
 /**
@@ -84,6 +91,9 @@ const t = initTRPC.context<typeof createTRPCContext>().create({
  * @see https://trpc.io/docs/router
  */
 export const createTRPCRouter = t.router;
+
+// exporting middleware from initTRPC
+export const createTRPCMiddleware = t.middleware;
 
 /**
  * Public (unauthenticated) procedure

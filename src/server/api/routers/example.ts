@@ -1,24 +1,13 @@
+import { Prisma } from "@prisma/client";
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-
-import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
-
-// export const exampleRouter = createTRPCRouter({
-//   hello: publicProcedure
-//     .input(z.object({ text: z.string() }))
-//     .query(({ input }) => {
-//       return {
-//         greeting: `Hello ${input.text}`,
-//       };
-//     }),
-//   getAll: publicProcedure.query(({ ctx }) => {
-//     return ctx.db.profile.findMany();
-//   }),
-// });
+import bcrypt from "bcrypt";
+import {
+  createTRPCRouter,
+  publicProcedure,
+} from "~/server/api/trpc";
 
 export const signUpRouter = createTRPCRouter({
-  // signup: publicProcedure
-  //   .input(z.object({ email: z.string() }))
-  //   .mutation((opts) => {}),
   demo: publicProcedure
     .input(z.object({ text: z.string() }))
     .query(({ input }) => {
@@ -37,17 +26,29 @@ export const signUpRouter = createTRPCRouter({
     )
     .mutation(async ({ input, ctx }) => {
       const { name, email, pass } = input;
-      const result = await ctx.db.profile.create({
-        data: {
-          name: name,
-          email: email,
-          password: pass,
-        },
-      });
+      const hashPass = await bcrypt.hash(pass, 12);
+      try {
+        await ctx.db.profile.create({
+          data: {
+            name: name,
+            email: email,
+            password: hashPass,
+          },
+        });
+      } catch (e) {
+        if (e instanceof Prisma.PrismaClientKnownRequestError) {
+          if (e.code === "P2002") {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: "Email already Exist",
+            });
+          }
+        }
+        throw e;
+      }
       return {
         status: 201,
         message: "Profile Created",
-        result: result,
       };
     }),
   login: publicProcedure
@@ -58,19 +59,26 @@ export const signUpRouter = createTRPCRouter({
       }),
     )
     .mutation(async (opts) => {
-      // const { name, email, pass } = opts.input;
       const result = await opts.ctx.db.profile.findUnique({
         where: {
           email: opts.input.email,
-          password: opts.input.pass,
         },
       });
       if (result !== null) {
-        return {
-          status: 201,
-          message: "Success",
-          result: result,
-        };
+        const hashPass = await bcrypt.compare(opts.input.pass, result.password);
+        if (hashPass) {
+          return {
+            status: 201,
+            message: "Success",
+            result: result,
+          };
+        } else {
+          return {
+            status: 404,
+            message: "Password is incorrect",
+            result: result,
+          };
+        }
       }
       return {
         status: 404,
