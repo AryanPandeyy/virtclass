@@ -1,3 +1,4 @@
+import { useRouter } from "next/router";
 import { FormEvent, useState } from "react";
 import { api } from "~/utils/api";
 
@@ -6,10 +7,12 @@ export default function Login() {
   const [pass, setPass] = useState<string>("");
   // wanted to use query but cant
   // https://github.com/trpc/trpc/discussions/2067
+  const router = useRouter();
   const mutate = api.example.login.useMutation();
   const handleSubmit = (e: FormEvent<HTMLFormElement>): void => {
     e.preventDefault();
-    mutate.mutate({email: email, pass: pass });
+    mutate.mutate({ email: email, pass: pass });
+    router.push("/dashboard").catch((e) => console.log(e));
   };
   return (
     <>

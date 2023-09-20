@@ -2,17 +2,17 @@ import { Prisma } from "@prisma/client";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import bcrypt from "bcrypt";
-import {
-  createTRPCRouter,
-  publicProcedure,
-} from "~/server/api/trpc";
+import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
+import { signJWT } from "../utils/jwt";
+import { protectedProcedure } from "../controller/auth";
 
 export const signUpRouter = createTRPCRouter({
-  demo: publicProcedure
+  demo: protectedProcedure
     .input(z.object({ text: z.string() }))
-    .query(({ input }) => {
+    .query(({ input,ctx }) => {
       return {
         signup: `hi ${input.text}`,
+        user: ctx.user,
       };
     }),
   // name, email, password
@@ -59,6 +59,7 @@ export const signUpRouter = createTRPCRouter({
       }),
     )
     .mutation(async (opts) => {
+      // const something = opts.ctx.resHeaders.set("set-cookie",`customCookie:${token}; HttpOnly`)
       const result = await opts.ctx.db.profile.findUnique({
         where: {
           email: opts.input.email,
@@ -67,8 +68,14 @@ export const signUpRouter = createTRPCRouter({
       if (result !== null) {
         const hashPass = await bcrypt.compare(opts.input.pass, result.password);
         if (hashPass) {
+          // https://github.com/trpc/trpc/discussions/4226
+          // https://codevoweb.com/trpc-api-with-nextjs-postgresql-access-refresh-tokens/
+          const token = signJWT(opts.input);
+          // chatgpt
+          opts.ctx.res.setHeader("Set-Cookie", `myCookie=${token}; HttpOnly`);
           return {
             status: 201,
+            token: token,
             message: "Success",
             result: result,
           };
@@ -86,4 +93,12 @@ export const signUpRouter = createTRPCRouter({
         result: result,
       };
     }),
+  logout: publicProcedure.mutation(({ ctx }) => {
+    try {
+      ctx.res.setHeader("Set-Cookie", `myCookie=; HttpOnly`);
+    } catch (e) {
+      console.log(e);
+    }
+  }),
+  // testAuth: protectedProcedure.input(z.object(text: z.string())).query({})
 });
