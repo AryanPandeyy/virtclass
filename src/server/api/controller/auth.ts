@@ -1,16 +1,22 @@
-import bcrypt from "bcrypt";
-import { createTRPCMiddleware, createTRPCRouter, publicProcedure } from "../trpc";
+import { createTRPCMiddleware, publicProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { verifyJWT } from "../utils/jwt";
 
+type user = {
+  id: number,
+  email: string,
+  name: string,
+  password: string,
+}
+
 const isAuthed = createTRPCMiddleware(async (opts) => {
   const { ctx } = opts;
-  const { req, res } = ctx;
+  const { req} = ctx;
   // const token = req.headers.authorization.split('')[1];
   const token = req.cookies;
   console.log('token from server ', token);
   try {
-    const user = verifyJWT(token.myCookie);
+    const user:user = verifyJWT(token.myCookie!);
     return opts.next({
       ctx: {
         user: user,

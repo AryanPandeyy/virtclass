@@ -8,10 +8,9 @@ import { protectedProcedure } from "../controller/auth";
 
 export const signUpRouter = createTRPCRouter({
   demo: protectedProcedure
-    .input(z.object({ text: z.string() }))
-    .query(({ input,ctx }) => {
+    .query(({ ctx }) => {
       return {
-        signup: `hi ${input.text}`,
+        signup: `hi`,
         user: ctx.user,
       };
     }),
@@ -59,39 +58,57 @@ export const signUpRouter = createTRPCRouter({
       }),
     )
     .mutation(async (opts) => {
+      // do this in nextjs app
       // const something = opts.ctx.resHeaders.set("set-cookie",`customCookie:${token}; HttpOnly`)
-      const result = await opts.ctx.db.profile.findUnique({
-        where: {
-          email: opts.input.email,
-        },
-      });
-      if (result !== null) {
-        const hashPass = await bcrypt.compare(opts.input.pass, result.password);
-        if (hashPass) {
-          // https://github.com/trpc/trpc/discussions/4226
-          // https://codevoweb.com/trpc-api-with-nextjs-postgresql-access-refresh-tokens/
-          const token = signJWT(opts.input);
-          // chatgpt
-          opts.ctx.res.setHeader("Set-Cookie", `myCookie=${token}; HttpOnly`);
-          return {
-            status: 201,
-            token: token,
-            message: "Success",
-            result: result,
-          };
-        } else {
-          return {
-            status: 404,
-            message: "Password is incorrect",
-            result: result,
-          };
+      try {
+        await opts.ctx.db.profile
+          .findUnique({
+            where: {
+              email: opts.input.email,
+            },
+          })
+          .then(async (result) => {
+            if (result !== null) {
+              const hashPass = await bcrypt.compare(
+                opts.input.pass,
+                result.password,
+              );
+              if (hashPass) {
+                // https://github.com/trpc/trpc/discussions/4226
+                // https://codevoweb.com/trpc-api-with-nextjs-postgresql-access-refresh-tokens/
+                const token = signJWT(opts.input);
+                // chatgpt
+                opts.ctx.res.setHeader(
+                  "Set-Cookie",
+                  `myCookie=${token}; HttpOnly`,
+                );
+                return {
+                  status: 201,
+                  token: token,
+                  message: "Success",
+                };
+              } else {
+                throw new TRPCError({
+                  code: "FORBIDDEN",
+                  message: "Incorrect Credential",
+                });
+              }
+            } else {
+              throw new TRPCError({
+                code: "FORBIDDEN",
+                message: "Incorrect Email",
+              });
+            }
+          });
+      } catch (e) {
+        if (e instanceof Prisma.PrismaClientKnownRequestError) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: `Prisma error, ${e.message}`,
+          });
         }
+        throw e;
       }
-      return {
-        status: 404,
-        message: "Failed",
-        result: result,
-      };
     }),
   logout: publicProcedure.mutation(({ ctx }) => {
     try {
